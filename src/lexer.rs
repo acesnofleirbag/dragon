@@ -13,7 +13,7 @@ pub struct Lexer {
 }
 
 #[derive(Debug)]
-enum Symbol {
+pub enum Symbol {
     Identifier,
     Number,
     Ponctuation,
@@ -22,16 +22,20 @@ enum Symbol {
 }
 
 #[derive(Debug)]
-struct Token {
-    key: Symbol,
-    value: String,
+pub struct Token {
+    pub key: Symbol,
+    pub value: String,
 }
 
 impl Lexer {
     pub fn new() -> Lexer {
         Lexer {
-            cursor: Cursor { line: 0, column: 0 },
+            cursor: Cursor { line: 1, column: 1 },
         }
+    }
+
+    fn is_ponctuation(ch: u8) -> bool {
+        ch == 0x3b
     }
 
     fn is_digit(ch: u8) -> bool {
@@ -70,8 +74,8 @@ impl Lexer {
         }
     }
 
-    // 47:14
     fn nchar(mut self, buffer: Vec<u8>) -> Result<Vec<Token>, &'static str> {
+        // NOTE: state is an information storage (automata theory)
         let mut state = 0;
         let mut tokens = vec![];
         let mut value = String::new();
@@ -87,25 +91,111 @@ impl Lexer {
                         state = 1;
                     } else if Lexer::is_digit(ch) {
                         state = 3;
+                    } else if Lexer::is_operator(ch) {
+                        state = 5;
+                    } else if Lexer::is_ponctuation(ch) {
+                        tokens.push(Token {
+                            key: Symbol::Ponctuation,
+                            value: value.clone(),
+                        });
+
+                        state = 0;
+                        value = String::new();
                     } else {
+                        println!(
+                            "DEBUG: line: {} column: {}",
+                            self.cursor.line, self.cursor.column
+                        );
+
                         return Err("Lexer: Unrecognized symbol");
                     }
                 }
                 1 => {
                     if Lexer::is_letter(ch) || Lexer::is_digit(ch) {
                         state = 1;
+                    } else if Lexer::is_whitespace_like(ch) || Lexer::is_operator(ch) {
+                        // NOTE: state == 2
+                        tokens.push(Token {
+                            key: Symbol::Identifier,
+                            value: value.clone(),
+                        });
+
+                        state = 0;
+                        value = String::new();
+                    } else if Lexer::is_ponctuation(ch) {
+                        tokens.push(Token {
+                            key: Symbol::Ponctuation,
+                            value: value.clone(),
+                        });
+
+                        state = 0;
+                        value = String::new();
                     } else {
-                        state = 2;
+                        println!(
+                            "DEBUG: line: {} column: {}",
+                            self.cursor.line, self.cursor.column
+                        );
+
+                        return Err("Lexer: Malformed identifier");
                     }
                 }
-                2 => {
-                    tokens.push(Token {
-                        key: Symbol::Identifier,
-                        value: value.clone(),
-                    });
+                3 => {
+                    if Lexer::is_digit(ch) {
+                        state = 3;
+                    } else if !Lexer::is_letter(ch) {
+                        // NOTE: state == 4
+                        tokens.push(Token {
+                            key: Symbol::Number,
+                            value: value.clone(),
+                        });
 
-                    state = 0;
-                    value = String::new();
+                        state = 0;
+                        value = String::new();
+                    } else if Lexer::is_ponctuation(ch) {
+                        tokens.push(Token {
+                            key: Symbol::Ponctuation,
+                            value: value.clone(),
+                        });
+
+                        state = 0;
+                        value = String::new();
+                    } else {
+                        println!(
+                            "DEBUG: line: {} column: {}",
+                            self.cursor.line, self.cursor.column
+                        );
+
+                        return Err("Lexer: Unrecognized number");
+                    }
+                }
+                5 => {
+                    if Lexer::is_operator(ch) {
+                        // NOTE: state == 6
+                        tokens.push(Token {
+                            key: Symbol::Operator,
+                            value: value.clone(),
+                        });
+
+                        state = 0;
+                        value = String::new();
+                    } else if !Lexer::is_operator(ch) {
+                        // NOTE: state == 7
+                        tokens.push(Token {
+                            key: Symbol::Assign,
+                            value: value.clone(),
+                        });
+
+                        state = 0;
+                        value = String::new();
+                    } else if Lexer::is_ponctuation(ch) {
+                        tokens.push(Token {
+                            key: Symbol::Ponctuation,
+                            value: value.clone(),
+                        });
+
+                        state = 0;
+                        value = String::new();
+                    }
                 }
                 _ => {
                     return Err("Lexer: Invalid state");
