@@ -1,3 +1,4 @@
+use std::env;
 use std::error::Error;
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
@@ -8,11 +9,13 @@ pub struct Cursor {
     column: i32,
 }
 
+#[derive(Debug)]
 pub struct Lexer {
     cursor: Cursor,
+    tokens: Vec<Token>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 pub enum Symbol {
     Identifier,
     Number,
@@ -21,16 +24,23 @@ pub enum Symbol {
     Assign,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Token {
     pub key: Symbol,
     pub value: String,
+}
+
+impl Token {
+    pub fn get_type(&self) -> Symbol {
+        self.key
+    }
 }
 
 impl Lexer {
     pub fn new() -> Lexer {
         Lexer {
             cursor: Cursor { line: 1, column: 1 },
+            tokens: vec![],
         }
     }
 
@@ -74,14 +84,18 @@ impl Lexer {
         }
     }
 
-    fn nchar(mut self, buffer: Vec<u8>) -> Result<Vec<Token>, &'static str> {
+    pub fn advance(&self, pos: usize) -> Option<&Token> {
+        self.tokens.get(pos)
+    }
+
+    fn nchar(&mut self, buffer: Vec<u8>) -> Result<(), String> {
         // NOTE: state is an information storage (automata theory)
         let mut state = 0;
         let mut tokens = vec![];
         let mut value = String::new();
 
         for &ch in buffer.iter() {
-            Lexer::refresh_cursor(&mut self, &mut value, ch);
+            Lexer::refresh_cursor(self, &mut value, ch);
 
             match state {
                 0 => {
@@ -107,7 +121,7 @@ impl Lexer {
                             self.cursor.line, self.cursor.column
                         );
 
-                        return Err("Lexer: Unrecognized symbol");
+                        return Err("Lexer: Unrecognized symbol".to_string());
                     }
                 }
                 1 => {
@@ -136,7 +150,7 @@ impl Lexer {
                             self.cursor.line, self.cursor.column
                         );
 
-                        return Err("Lexer: Malformed identifier");
+                        return Err("Lexer: Malformed identifier".to_string());
                     }
                 }
                 3 => {
@@ -165,7 +179,7 @@ impl Lexer {
                             self.cursor.line, self.cursor.column
                         );
 
-                        return Err("Lexer: Unrecognized number");
+                        return Err("Lexer: Unrecognized number".to_string());
                     }
                 }
                 5 => {
@@ -198,25 +212,29 @@ impl Lexer {
                     }
                 }
                 _ => {
-                    return Err("Lexer: Invalid state");
+                    return Err("Lexer: Invalid state".to_string());
                 }
             }
         }
 
-        Ok(tokens)
+        self.tokens = tokens;
+
+        // NOTE: `DEBUG=1 cargo run` to activate token printing
+        if let Ok(_) = env::var("DEBUG") {
+            println!("{:#?}", self.tokens);
+        }
+
+        Ok(())
     }
 
-    pub fn scanner(self, filepath: &str) -> Result<(), Box<dyn Error>> {
+    pub fn scanner(&mut self, filepath: &str) -> Result<(), Box<dyn Error>> {
         let f = File::open(filepath)?;
         let mut reader = BufReader::new(f);
         let mut buffer = Vec::new();
 
         reader.read_to_end(&mut buffer)?;
 
-        let tokens = self.nchar(buffer)?;
-
-        // @@@
-        dbg!(tokens);
+        self.nchar(buffer)?;
 
         Ok(())
     }

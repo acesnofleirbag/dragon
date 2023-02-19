@@ -1,0 +1,10 @@
+A compiler implementation "under the hood" for educational purposes
+
+```
+# run with debugging - print tokens
+$ DEBUG=1 cargo run
+
+# or
+
+$ cargo run
+```
